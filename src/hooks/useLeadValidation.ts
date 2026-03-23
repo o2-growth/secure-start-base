@@ -9,8 +9,14 @@ export interface DuplicateLead {
   document: string | null;
 }
 
+export interface ValidationResult {
+  duplicates: DuplicateLead[];
+  can_override: boolean;
+}
+
 export function useLeadValidation() {
   const [duplicates, setDuplicates] = useState<DuplicateLead[]>([]);
+  const [canOverride, setCanOverride] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
 
   const checkDuplicates = async (
@@ -18,35 +24,32 @@ export function useLeadValidation() {
     email?: string,
     phone?: string,
     document?: string
-  ): Promise<DuplicateLead[]> => {
+  ): Promise<ValidationResult> => {
     setIsChecking(true);
     try {
-      const filters: string[] = [];
-      if (email?.trim()) filters.push(`email.eq.${email.trim()}`);
-      if (phone?.trim()) filters.push(`phone.eq.${phone.trim()}`);
-      if (document?.trim()) filters.push(`document.eq.${document.trim()}`);
-
-      if (filters.length === 0) {
-        setDuplicates([]);
-        return [];
-      }
-
-      const { data, error } = await supabase
-        .from("leads")
-        .select("id, full_name, email, phone, document")
-        .eq("organization_id", organizationId)
-        .or(filters.join(","));
+      const { data, error } = await supabase.functions.invoke("validate-lead", {
+        body: { organization_id: organizationId, email, phone, document },
+      });
 
       if (error) throw error;
-      const found = (data ?? []) as DuplicateLead[];
-      setDuplicates(found);
-      return found;
+
+      const result: ValidationResult = {
+        duplicates: data.duplicates ?? [],
+        can_override: data.can_override ?? false,
+      };
+
+      setDuplicates(result.duplicates);
+      setCanOverride(result.can_override);
+      return result;
     } finally {
       setIsChecking(false);
     }
   };
 
-  const clearDuplicates = () => setDuplicates([]);
+  const clearDuplicates = () => {
+    setDuplicates([]);
+    setCanOverride(false);
+  };
 
-  return { duplicates, isChecking, checkDuplicates, clearDuplicates };
+  return { duplicates, canOverride, isChecking, checkDuplicates, clearDuplicates };
 }
