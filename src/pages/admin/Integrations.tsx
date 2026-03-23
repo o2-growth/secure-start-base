@@ -1,21 +1,140 @@
+import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Puzzle } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Loader2, Plus, Pencil, Puzzle } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { format } from "date-fns";
+import type { Database } from "@/integrations/supabase/types";
+
+type Provider = Database["public"]["Enums"]["integration_provider"];
+const PROVIDERS: Provider[] = ["brevo", "whatsapp_official", "google_meet", "elephan", "contracts"];
+const PROVIDER_LABELS: Record<Provider, string> = {
+  brevo: "Brevo",
+  whatsapp_official: "WhatsApp API",
+  google_meet: "Google Meet",
+  elephan: "Elephan IA",
+  contracts: "Contratos",
+};
+
+function useIntegrations() {
+  return useQuery({
+    queryKey: ["integrations"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("integration_connections")
+        .select("*, organizations(name)")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+function useCreateIntegration() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (conn: { provider: Provider; organization_id?: string | null }) => {
+      const { error } = await supabase.from("integration_connections").insert(conn);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["integrations"] }),
+  });
+}
+
+function useUpdateIntegration() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: { id: string; active?: boolean }) => {
+      const { error } = await supabase.from("integration_connections").update(updates).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["integrations"] }),
+  });
+}
 
 export default function Integrations() {
+  const { data: connections, isLoading } = useIntegrations();
+  const createConn = useCreateIntegration();
+  const updateConn = useUpdateIntegration();
+  const [dialog, setDialog] = useState(false);
+  const [provider, setProvider] = useState<Provider>("brevo");
+
+  const handleCreate = () => {
+    createConn.mutate({ provider }, {
+      onSuccess: () => { toast.success("Integração criada"); setDialog(false); },
+      onError: (e) => toast.error(e.message),
+    });
+  };
+
+  if (isLoading) return <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Integrações</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Brevo, WhatsApp, Google Meet, Elephan, Contratos
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Integrações</h1>
+          <p className="text-sm text-muted-foreground mt-1">Brevo, WhatsApp, Google Meet, Elephan, Contratos</p>
+        </div>
+        <Button size="sm" onClick={() => setDialog(true)}><Plus className="h-4 w-4 mr-1" /> Nova Integração</Button>
       </div>
+
+      <Dialog open={dialog} onOpenChange={setDialog}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Nova Integração</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Provedor</Label>
+              <Select value={provider} onValueChange={(v: any) => setProvider(v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {PROVIDERS.map((p) => <SelectItem key={p} value={p}>{PROVIDER_LABELS[p]}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button onClick={handleCreate} disabled={createConn.isPending} className="w-full">Criar</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Card>
-        <CardContent className="flex flex-col items-center justify-center py-12">
-          <Puzzle className="h-12 w-12 text-muted-foreground mb-4" />
-          <p className="text-muted-foreground">
-            Integrações serão implementadas na Fase 4.
-          </p>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Provedor</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Último Sync</TableHead>
+                <TableHead>Ativo</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {connections?.map((c) => (
+                <TableRow key={c.id}>
+                  <TableCell className="font-medium">{PROVIDER_LABELS[c.provider as Provider] ?? c.provider}</TableCell>
+                  <TableCell><Badge variant={c.active ? "default" : "secondary"}>{c.active ? "Ativo" : "Inativo"}</Badge></TableCell>
+                  <TableCell className="text-muted-foreground">{c.last_sync_at ? format(new Date(c.last_sync_at), "dd/MM/yyyy HH:mm") : "Nunca"}</TableCell>
+                  <TableCell>
+                    <Switch checked={c.active} onCheckedChange={(v) => updateConn.mutate({ id: c.id, active: v })} />
+                  </TableCell>
+                </TableRow>
+              ))}
+              {(!connections || connections.length === 0) && (
+                <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                  <Puzzle className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                  Nenhuma integração configurada.
+                </TableCell></TableRow>
+              )}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
     </div>
