@@ -18,6 +18,7 @@ interface PipelineField {
   type: string;
   required: boolean;
   options: any;
+  visible_on_card: boolean;
 }
 
 interface FieldValue {
