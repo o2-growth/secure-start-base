@@ -86,9 +86,74 @@ Deno.serve(async (req) => {
       created_by: userId,
     });
 
-    // TODO: Replace with actual Brevo API call
-    // const BREVO_API_KEY = Deno.env.get("BREVO_API_KEY");
-    // await fetch("https://api.brevo.com/v3/smtp/email", { ... });
+    // Call real Brevo Transactional Email API
+    const BREVO_API_KEY = Deno.env.get("BREVO_API_KEY");
+    if (!BREVO_API_KEY) {
+      await supabase.from("message_deliveries").update({
+        status: "failed",
+        error_message: "BREVO_API_KEY not configured",
+      }).eq("id", delivery.id);
+      throw new Error("BREVO_API_KEY not configured");
+    }
+
+    // Fetch lead info for email recipient
+    const { data: cardWithLead } = await supabase
+      .from("cards")
+      .select("leads(full_name, email)")
+      .eq("id", card_id)
+      .single();
+
+    const lead = (cardWithLead?.leads as any);
+    if (!lead?.email) {
+      await supabase.from("message_deliveries").update({
+        status: "failed",
+        error_message: "Lead has no email address",
+      }).eq("id", delivery.id);
+      throw new Error("Lead has no email address");
+    }
+
+    // Interpolate template variables
+    const body = template.body.replace(/\{\{(\w+)\}\}/g, (_: string, key: string) => {
+      const vars: Record<string, string> = {
+        nome: lead.full_name ?? "",
+        email: lead.email ?? "",
+      };
+      return vars[key] ?? "";
+    });
+
+    const brevoPayload = {
+      sender: { name: "O2 CRM", email: "no-reply@o2inc.com.br" },
+      to: [{ email: lead.email, name: lead.full_name }],
+      subject: template.subject ?? template.name,
+      htmlContent: body,
+    };
+
+    const brevoRes = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: {
+        "api-key": BREVO_API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(brevoPayload),
+    });
+
+    if (!brevoRes.ok) {
+      const errText = await brevoRes.text();
+      await supabase.from("message_deliveries").update({
+        status: "failed",
+        error_message: errText,
+      }).eq("id", delivery.id);
+      throw new Error(`Brevo error: ${errText}`);
+    }
+
+    const brevoData = await brevoRes.json();
+
+    // Update delivery record with success
+    await supabase.from("message_deliveries").update({
+      status: "sent",
+      provider_message_id: brevoData.messageId ?? null,
+      sent_at: new Date().toISOString(),
+    }).eq("id", delivery.id);
 
     return new Response(JSON.stringify({ success: true, delivery_id: delivery.id }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
