@@ -222,6 +222,23 @@ export default function CardDetails() {
                 </Button>
               </CardContent>
             </Card>
+
+            {/* Contract Panel */}
+            <CardContractPanel
+              cardId={card.id}
+              contractStatus={card.contract_status}
+              canGenerate={
+                profile?.role === "admin" ||
+                profile?.role === "enablement" ||
+                profile?.role === "closer"
+              }
+            />
+
+            {/* Meeting Panel */}
+            <CardMeetingPanel cardId={card.id} />
+
+            {/* Communication Panel */}
+            <CardMessagePanel cardId={card.id} leadPhone={lead?.phone} />
           </div>
         </div>
       </div>
