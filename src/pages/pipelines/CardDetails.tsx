@@ -9,6 +9,9 @@ import { AppShell } from "@/components/AppShell";
 import { CardForm } from "@/components/CardForm";
 import { ActivityTimeline } from "@/components/ActivityTimeline";
 import { PhaseGuardDialog } from "@/components/PhaseGuardDialog";
+import { CardContractPanel } from "@/components/CardContractPanel";
+import { CardMeetingPanel } from "@/components/CardMeetingPanel";
+import { CardMessagePanel } from "@/components/CardMessagePanel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -219,6 +222,23 @@ export default function CardDetails() {
                 </Button>
               </CardContent>
             </Card>
+
+            {/* Contract Panel */}
+            <CardContractPanel
+              cardId={card.id}
+              contractStatus={card.contract_status}
+              canGenerate={
+                profile?.role === "admin" ||
+                profile?.role === "enablement" ||
+                profile?.role === "closer"
+              }
+            />
+
+            {/* Meeting Panel */}
+            <CardMeetingPanel cardId={card.id} />
+
+            {/* Communication Panel */}
+            <CardMessagePanel cardId={card.id} leadPhone={lead?.phone} />
           </div>
         </div>
       </div>

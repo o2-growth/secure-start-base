@@ -26,6 +26,7 @@ import {
   LogOut,
   Building,
   Store,
+  FileText,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -61,6 +62,7 @@ export function AppSidebar() {
     { title: "Pipelines", url: "/admin/pipelines", icon: Kanban },
     { title: "Automações", url: "/admin/automations", icon: Zap },
     { title: "Integrações", url: "/admin/integrations", icon: Puzzle },
+    { title: "Templates", url: "/admin/templates", icon: FileText },
   ];
 
   if (isLoading) {
