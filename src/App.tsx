@@ -23,6 +23,7 @@ import BusinessUnits from "@/pages/admin/BusinessUnits";
 import PipelinesConfig from "@/pages/admin/PipelinesConfig";
 import AutomationRules from "@/pages/admin/AutomationRules";
 import Integrations from "@/pages/admin/Integrations";
+import MessageTemplates from "@/pages/admin/MessageTemplates";
 
 import NotFound from "@/pages/NotFound";
 
