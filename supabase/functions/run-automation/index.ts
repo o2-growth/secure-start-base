@@ -101,18 +101,32 @@ Deno.serve(async (req) => {
           input_payload: { trigger_type, card_status: card.status },
         }).select().single();
 
-        // Process actions
+        // Process actions — invoke real send functions
         const channel = (actions as any)?.channel;
         const templateId = (actions as any)?.template_id;
+        const phone = (actions as any)?.phone;
 
-        if (channel && templateId) {
-          // Create message delivery record
-          await supabase.from("message_deliveries").insert({
-            card_id: card_id,
-            channel: channel,
-            template_id: templateId,
-            status: "pending",
+        if (channel === "email" && templateId) {
+          await supabase.functions.invoke("send-brevo-email", {
+            body: { card_id: card_id, template_id: templateId },
           });
+        } else if (channel === "whatsapp" && templateId) {
+          const cardPhone = (card as any)?.leads?.phone ?? phone ?? null;
+          if (cardPhone) {
+            await supabase.functions.invoke("send-whatsapp", {
+              body: { card_id: card_id, template_id: templateId, phone: cardPhone },
+            });
+          }
+        } else if (channel === "both" && templateId) {
+          await supabase.functions.invoke("send-brevo-email", {
+            body: { card_id: card_id, template_id: templateId },
+          });
+          const cardPhone = (card as any)?.leads?.phone ?? phone ?? null;
+          if (cardPhone) {
+            await supabase.functions.invoke("send-whatsapp", {
+              body: { card_id: card_id, template_id: templateId, phone: cardPhone },
+            });
+          }
         }
 
         // Register activity
