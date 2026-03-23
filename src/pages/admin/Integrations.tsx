@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { IntegrationStatusCard } from "@/components/IntegrationStatusCard";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, Plus, Pencil, Puzzle } from "lucide-react";
@@ -104,6 +105,14 @@ export default function Integrations() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {connections && connections.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {connections.map((conn) => (
+            <IntegrationStatusCard key={conn.id} connection={conn} />
+          ))}
+        </div>
+      )}
 
       <Card>
         <CardContent className="p-0">
