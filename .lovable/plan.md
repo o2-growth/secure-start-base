@@ -1,5 +1,3 @@
-
-
 ## Fase 3: Admin + Automations
 
 ### Summary
@@ -132,3 +130,20 @@ CREATE POLICY start_forms_update ON public.start_forms
 **Migration:**
 - One migration adding missing INSERT/UPDATE RLS policies
 
+## Fase 4: Base de Integrações ✅
+
+### Implementado
+
+1. **Migration**: UPDATE policy em `contracts` para admin/enablement/closer
+2. **6 Edge Functions (stubs)**:
+   - `send-brevo-email` — registra `message_deliveries` + activity, placeholder Brevo API
+   - `send-whatsapp` — registra `message_deliveries` + activity, placeholder WhatsApp API
+   - `meet-webhook` — insere `meeting_records` provider google_meet + activity
+   - `elephan-webhook` — upsert `meeting_records` provider elephan + activity
+   - `generate-contract` — insere `contracts` draft + atualiza card + activity
+   - `nightly-followups` — processa `automation_runs` pending, cria deliveries
+3. **Service layer**: `brevo.service.ts`, `whatsapp.service.ts`, `meet.service.ts`, `contracts.service.ts`
+4. **Hooks**: `useContractGeneration`, `useMeetingData`, `useSendMessage`
+5. **CardDetails**: 3 painéis na sidebar (Contrato, Reuniões, Comunicação)
+6. **Admin Templates**: CRUD de `message_templates` em `/admin/templates`
+7. **Sidebar**: link "Templates" adicionado na navegação admin
