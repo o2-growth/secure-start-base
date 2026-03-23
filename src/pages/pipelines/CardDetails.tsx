@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { AppShell } from "@/components/AppShell";
 import { CardForm } from "@/components/CardForm";
 import { ActivityTimeline } from "@/components/ActivityTimeline";
+import { AutomationLogTable } from "@/components/AutomationLogTable";
 import { PhaseGuardDialog } from "@/components/PhaseGuardDialog";
 import { CardContractPanel } from "@/components/CardContractPanel";
 import { CardMeetingPanel } from "@/components/CardMeetingPanel";
@@ -184,6 +185,16 @@ export default function CardDetails() {
                   </Button>
                 </div>
                 <ActivityTimeline activities={activities} />
+              </CardContent>
+            </Card>
+
+            {/* Automation Runs */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Automações</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <AutomationLogTable cardId={cardId} />
               </CardContent>
             </Card>
           </div>

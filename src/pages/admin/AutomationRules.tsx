@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, Plus, Pencil, Zap, History } from "lucide-react";
 import { useAutomationRules, useAutomationRuns, useCreateAutomationRule, useUpdateAutomationRule } from "@/hooks/useAutomationRules";
+import { AutomationLogTable } from "@/components/AutomationLogTable";
 import { usePipelines } from "@/hooks/usePipelines";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -209,6 +210,11 @@ export default function AutomationRules() {
           </Table>
         </CardContent>
       </Card>
+
+      <div className="mt-8">
+        <h3 className="text-lg font-semibold mb-4">Execuções Recentes</h3>
+        <AutomationLogTable />
+      </div>
     </div>
   );
 }
