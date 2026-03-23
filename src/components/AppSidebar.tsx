@@ -62,6 +62,7 @@ export function AppSidebar() {
     { title: "Pipelines", url: "/admin/pipelines", icon: Kanban },
     { title: "Automações", url: "/admin/automations", icon: Zap },
     { title: "Integrações", url: "/admin/integrations", icon: Puzzle },
+    { title: "Templates", url: "/admin/templates", icon: FileText },
   ];
 
   if (isLoading) {

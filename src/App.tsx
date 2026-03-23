@@ -55,6 +55,7 @@ const App = () => (
           <Route path="/admin/pipelines" element={<ProtectedRoute requireAdmin><PipelinesConfig /></ProtectedRoute>} />
           <Route path="/admin/automations" element={<ProtectedRoute requireAdmin><AutomationRules /></ProtectedRoute>} />
           <Route path="/admin/integrations" element={<ProtectedRoute requireAdmin><Integrations /></ProtectedRoute>} />
+          <Route path="/admin/templates" element={<ProtectedRoute requireAdmin><MessageTemplates /></ProtectedRoute>} />
 
           <Route path="*" element={<NotFound />} />
         </Routes>
