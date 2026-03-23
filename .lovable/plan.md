@@ -1,119 +1,134 @@
 
 
-## Fase 2: Core CRM - Plano de Implementação
+## Fase 3: Admin + Automations
 
-### Resumo
-Implementar o Kanban board funcional, cadastro de lead com validação de duplicidade, card details com timeline e activity log, e movimentação de cards entre fases com validação de campos obrigatórios.
+### Summary
 
----
-
-### Entrega 1: Hooks e serviços de dados
-
-**Novos hooks:**
-- `usePipelineBoard.ts` — busca cards de um pipeline com lead, phase, owner; agrupa por fase
-- `useCard.ts` — busca card individual com lead, field values, activities, meetings
-- `useCreateLead.ts` — mutation: valida duplicidade → insere lead → cria card na fase 1 → registra activity
-- `useLeadValidation.ts` — checa duplicidade por email/phone/document na tabela leads
-- `useMoveCard.ts` — mutation: valida campos obrigatórios da fase destino → atualiza current_phase_id → registra activity type "move"
+Replace all 5 admin placeholder pages with functional CRUD interfaces, and build the automation engine (automation rules management UI + a `run-automation` edge function).
 
 ---
 
-### Entrega 2: Kanban Board (`PipelineBoard.tsx`)
+### 1. Admin Users (`/admin/users`)
 
-Substituir o placeholder atual por board funcional:
-- Header com nome do pipeline, BU badge, botão "Novo Lead"
-- Colunas por fase (ordenadas por `position`), cada uma mostrando contagem de cards
-- Cards mostrando: nome do lead, owner, status badge, data de criação
-- Drag-and-drop usando `@dnd-kit/core` + `@dnd-kit/sortable` (lib leve e acessível)
-- Ao soltar card em nova fase: dispara `useMoveCard` que valida campos obrigatórios antes de persistir
-- States: loading (skeleton columns), empty (mensagem por coluna), error
+- List all profiles with role, organization, BU, active status
+- Query: `profiles` joined with `user_roles`, `organizations`, `business_units`
+- Actions: invite new user (creates auth user + profile + role), edit role, toggle active
+- **Migration needed**: Add INSERT policy on `profiles` for admin role (currently missing -- only UPDATE own is allowed). Add INSERT/UPDATE policies on `message_templates` and `start_forms` for admin/enablement.
 
-**Componentes novos:**
-- `KanbanBoard.tsx` — container com DndContext
-- `KanbanColumn.tsx` — coluna droppable com header e lista de cards
-- `CardTile.tsx` — card draggable compacto
-- `PhaseGuardDialog.tsx` — dialog modal que lista campos obrigatórios faltantes ao tentar mover
+### 2. Admin Business Units (`/admin/business-units`)
 
----
+- List BUs with organization name, slug, active status, pipeline count
+- Actions: create BU, edit name/slug, toggle active
+- **Migration needed**: Add INSERT/UPDATE policies on `business_units` for admin/enablement
 
-### Entrega 3: Cadastro de Lead (`NewLead.tsx`)
+### 3. Admin Pipelines + Phases + Fields (`/admin/pipelines`)
 
-Substituir placeholder por formulário funcional:
-- Campos: nome, email, telefone, documento, empresa, origem, observações
-- Validação client-side com zod + react-hook-form
-- Ao submeter: primeiro checa duplicidade (query em leads por email/phone/document no mesmo org)
-- Se duplicata encontrada: exibe `LeadValidationAlert` com dados do lead existente
-  - Admin/enablement veem botão "Criar mesmo assim" (override)
-  - Outros perfis: bloqueado
-- Se válido: insere lead → cria card na fase 1 do pipeline → registra activity → redirect para card details
-- States: form, loading, duplicate alert, success redirect, error
+- Accordion/expandable list of pipelines grouped by BU
+- Each pipeline expands to show:
+  - **Phases**: sortable list, add/edit phase name, toggle is_final
+  - **Fields**: table of pipeline_fields, add/edit field (label, key, type, required, phase_id, visible flags, options)
+- Uses existing INSERT/UPDATE RLS policies on `pipelines`, `pipeline_phases`, `pipeline_fields` (admin/enablement allowed)
 
-**Componente novo:**
-- `LeadValidationAlert.tsx` — alert com dados do lead duplicado e ação de override
+### 4. Admin Automations (`/admin/automations`)
 
----
+- List automation_rules grouped by pipeline
+- Each rule shows: trigger_type, conditions, actions, active toggle
+- Create/edit dialog with:
+  - Pipeline selector
+  - Trigger type (card_created, phase_enter, delay_elapsed, meeting_finished)
+  - Conditions JSON editor (simplified key-value form)
+  - Actions JSON editor (channel, template_id, delay_days)
+  - Active toggle
+- View automation_runs logs per rule
+- Uses existing INSERT/UPDATE RLS policies on `automation_rules`
 
-### Entrega 4: Card Details (`CardDetails.tsx`)
+### 5. Admin Integrations (`/admin/integrations`)
 
-Substituir placeholder por página completa:
-- Header: nome do lead, status badge, fase atual, owner
-- Seção de campos: lista card_field_values editáveis (baseado em pipeline_fields)
-- `CardForm.tsx` — formulário inline para editar campos do card
-- `ActivityTimeline.tsx` — timeline vertical de activities ordenada por created_at desc
-  - Ícones por tipo (note, email, whatsapp, meeting, move, contract, system)
-  - Payload formatado por tipo
-- Ação "Adicionar nota" — insere activity type "note"
-- Botão de mover fase com select de fases disponíveis + validação
-- States: loading, error, empty timeline
+- List integration_connections with provider, status, last_sync
+- Add/edit connection (provider selector, config fields)
+- Uses existing INSERT/UPDATE RLS policies on `integration_connections`
 
----
+### 6. Database Migrations
 
-### Detalhes Técnicos
+Single migration to add missing RLS policies:
 
-**Dependência npm nova:** `@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/utilities`
+```sql
+-- Allow admin to insert profiles (for user invites)
+CREATE POLICY profiles_insert_admin ON public.profiles
+  FOR INSERT TO authenticated
+  WITH CHECK (has_role(auth.uid(), 'admin'));
 
-**Queries Supabase no board:**
-```text
-cards query:
-  from("cards")
-  .select("*, leads(full_name, email, phone, company_name), 
-           pipeline_phases(name, position), 
-           profiles!cards_owner_profile_id_fkey(full_name)")
-  .eq("pipeline_id", pipelineId)
-  .in("status", ["open"])
+-- Allow admin to update any profile
+CREATE POLICY profiles_update_admin ON public.profiles
+  FOR UPDATE TO authenticated
+  USING (has_role(auth.uid(), 'admin'))
+  WITH CHECK (has_role(auth.uid(), 'admin'));
+
+-- Allow admin/enablement to manage BUs
+CREATE POLICY bu_insert ON public.business_units
+  FOR INSERT TO authenticated
+  WITH CHECK (has_any_role(auth.uid(), ARRAY['admin','enablement']));
+
+CREATE POLICY bu_update ON public.business_units
+  FOR UPDATE TO authenticated
+  USING (has_any_role(auth.uid(), ARRAY['admin','enablement']))
+  WITH CHECK (has_any_role(auth.uid(), ARRAY['admin','enablement']));
+
+-- Allow admin/enablement to manage message templates
+CREATE POLICY msg_templates_insert ON public.message_templates
+  FOR INSERT TO authenticated
+  WITH CHECK (has_any_role(auth.uid(), ARRAY['admin','enablement']));
+
+CREATE POLICY msg_templates_update ON public.message_templates
+  FOR UPDATE TO authenticated
+  USING (has_any_role(auth.uid(), ARRAY['admin','enablement']))
+  WITH CHECK (has_any_role(auth.uid(), ARRAY['admin','enablement']));
+
+-- Allow admin/enablement to manage start forms
+CREATE POLICY start_forms_insert ON public.start_forms
+  FOR INSERT TO authenticated
+  WITH CHECK (has_any_role(auth.uid(), ARRAY['admin','enablement']));
+
+CREATE POLICY start_forms_update ON public.start_forms
+  FOR UPDATE TO authenticated
+  USING (has_any_role(auth.uid(), ARRAY['admin','enablement']))
+  WITH CHECK (has_any_role(auth.uid(), ARRAY['admin','enablement']));
 ```
 
-**Validação de duplicidade (client-side query):**
-```text
-from("leads")
-  .select("id, full_name, email, phone, document")
-  .eq("organization_id", orgId)
-  .or(`email.eq.${email},phone.eq.${phone},document.eq.${doc}`)
-```
+### 7. Edge Function: `run-automation`
 
-**Validação de fase (move card):**
-```text
-1. Buscar pipeline_fields onde phase_id = targetPhaseId AND required = true
-2. Buscar card_field_values do card
-3. Comparar: se algum required field não tem value → bloquear e mostrar dialog
-```
+- Receives `{ card_id, trigger_type }` 
+- Queries matching active `automation_rules` for the card's pipeline
+- Evaluates conditions against card data
+- Executes actions (logs to `automation_runs`, prepares message_deliveries)
+- For delay-based actions, records `automation_runs` with status `pending` for the nightly cron to pick up later
+- Uses service role key internally
 
-**RLS:** Todas as queries já são protegidas pelas policies existentes. Nenhuma migração necessária — o schema já suporta tudo.
+### 8. New Hooks
 
-**Arquivos criados/modificados:**
-- `src/hooks/usePipelineBoard.ts` (novo)
-- `src/hooks/useCard.ts` (novo)
-- `src/hooks/useCreateLead.ts` (novo)
-- `src/hooks/useLeadValidation.ts` (novo)
-- `src/hooks/useMoveCard.ts` (novo)
-- `src/components/KanbanBoard.tsx` (novo)
-- `src/components/KanbanColumn.tsx` (novo)
-- `src/components/CardTile.tsx` (novo)
-- `src/components/CardForm.tsx` (novo)
-- `src/components/LeadValidationAlert.tsx` (novo)
-- `src/components/ActivityTimeline.tsx` (novo)
-- `src/components/PhaseGuardDialog.tsx` (novo)
-- `src/pages/pipelines/PipelineBoard.tsx` (reescrito)
-- `src/pages/pipelines/NewLead.tsx` (reescrito)
-- `src/pages/pipelines/CardDetails.tsx` (reescrito)
+- `useAdminUsers` -- CRUD profiles + user_roles
+- `useAdminBUs` -- CRUD business_units
+- `useAdminPipelines` -- CRUD pipelines, phases, fields
+- `useAutomationRules` -- CRUD automation_rules + read automation_runs
+
+### Files
+
+**New/Rewritten pages:**
+- `src/pages/admin/Users.tsx`
+- `src/pages/admin/BusinessUnits.tsx`
+- `src/pages/admin/PipelinesConfig.tsx`
+- `src/pages/admin/AutomationRules.tsx`
+- `src/pages/admin/Integrations.tsx`
+
+**New hooks:**
+- `src/hooks/useAdminUsers.ts`
+- `src/hooks/useAdminBUs.ts`
+- `src/hooks/useAdminPipelines.ts`
+- `src/hooks/useAutomationRules.ts`
+
+**New edge function:**
+- `supabase/functions/run-automation/index.ts`
+
+**Migration:**
+- One migration adding missing INSERT/UPDATE RLS policies
 
