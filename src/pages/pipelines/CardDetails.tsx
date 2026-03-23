@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useCard } from "@/hooks/useCard";
-import { useMoveCard, validatePhaseFields } from "@/hooks/useMoveCard";
+import { useMoveCard, MissingFieldsError } from "@/hooks/useMoveCard";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -59,18 +59,20 @@ export default function CardDetails() {
     }
   };
 
-  const handleMovePhase = async () => {
-    if (!selectedPhase || !cardId || !pipelineId) return;
-    const missing = await validatePhaseFields(cardId, selectedPhase, pipelineId);
-    if (missing.length > 0) {
-      setMissingFields(missing);
-      setGuardOpen(true);
-      return;
-    }
+  const handleMovePhase = () => {
+    if (!selectedPhase || !cardId) return;
     const phase = phases.find((p) => p.id === selectedPhase);
     moveCard.mutate(
       { cardId, targetPhaseId: selectedPhase, targetPhaseName: phase?.name ?? "" },
-      { onSuccess: () => { setSelectedPhase(""); refetch(); } }
+      {
+        onSuccess: () => { setSelectedPhase(""); refetch(); },
+        onError: (err: Error) => {
+          if (err instanceof MissingFieldsError) {
+            setMissingFields(err.missingFields);
+            setGuardOpen(true);
+          }
+        },
+      }
     );
   };
 

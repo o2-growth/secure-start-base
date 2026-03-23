@@ -5,7 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 interface MoveCardInput {
   cardId: string;
   targetPhaseId: string;
-  targetPhaseName: string;
+  targetPhaseName?: string;
 }
 
 export interface MissingField {
@@ -14,6 +14,19 @@ export interface MissingField {
   key: string;
 }
 
+export class MissingFieldsError extends Error {
+  missingFields: MissingField[];
+  constructor(fields: MissingField[]) {
+    super("missing_required_fields");
+    this.missingFields = fields;
+  }
+}
+
+/**
+ * @deprecated Field validation now runs server-side inside the move-card edge function.
+ * This function is kept for backwards compatibility with existing callers (CardDetails, KanbanBoard).
+ * Prefer relying on MissingFieldsError thrown by useMoveCard instead.
+ */
 export async function validatePhaseFields(
   cardId: string,
   targetPhaseId: string,
@@ -51,24 +64,21 @@ export function useMoveCard() {
 
   return useMutation({
     mutationFn: async (input: MoveCardInput) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Não autenticado");
-
-      const { error } = await supabase
-        .from("cards")
-        .update({ current_phase_id: input.targetPhaseId })
-        .eq("id", input.cardId);
-      if (error) throw error;
-
-      await supabase.from("activities").insert({
-        card_id: input.cardId,
-        type: "move",
-        payload: {
-          to_phase: input.targetPhaseName,
-          to_phase_id: input.targetPhaseId,
+      const { data, error } = await supabase.functions.invoke("move-card", {
+        body: {
+          card_id: input.cardId,
+          target_phase_id: input.targetPhaseId,
+          target_phase_name: input.targetPhaseName,
         },
-        created_by: user.id,
       });
+
+      if (error) throw error;
+      if (data?.error === "missing_required_fields") {
+        throw new MissingFieldsError(data.missing_fields ?? []);
+      }
+      if (data?.error) throw new Error(data.error);
+
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["pipeline-cards"] });
@@ -77,6 +87,7 @@ export function useMoveCard() {
       toast({ title: "Card movido com sucesso" });
     },
     onError: (err: Error) => {
+      if (err instanceof MissingFieldsError) return; // PhaseGuardDialog handles this
       toast({ title: "Erro ao mover card", description: err.message, variant: "destructive" });
     },
   });

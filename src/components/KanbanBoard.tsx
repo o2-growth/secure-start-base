@@ -9,7 +9,7 @@ import {
 } from "@dnd-kit/core";
 import { KanbanColumn } from "./KanbanColumn";
 import { PhaseGuardDialog } from "./PhaseGuardDialog";
-import { useMoveCard, validatePhaseFields, type MissingField } from "@/hooks/useMoveCard";
+import { useMoveCard, MissingFieldsError, type MissingField } from "@/hooks/useMoveCard";
 import type { BoardPhase } from "@/hooks/usePipelineBoard";
 
 interface KanbanBoardProps {
@@ -43,19 +43,21 @@ export function KanbanBoard({ phases, pipelineId, onCardClick }: KanbanBoardProp
       const targetPhase = phases.find((p) => p.id === targetPhaseId);
       if (!targetPhase) return;
 
-      // Validate required fields
-      const missing = await validatePhaseFields(cardId, targetPhaseId, pipelineId);
-      if (missing.length > 0) {
-        setMissingFields(missing);
-        setGuardOpen(true);
-        return;
-      }
-
-      moveCard.mutate({
-        cardId,
-        targetPhaseId,
-        targetPhaseName: targetPhase.name,
-      });
+      moveCard.mutate(
+        {
+          cardId,
+          targetPhaseId,
+          targetPhaseName: targetPhase.name,
+        },
+        {
+          onError: (err: Error) => {
+            if (err instanceof MissingFieldsError) {
+              setMissingFields(err.missingFields);
+              setGuardOpen(true);
+            }
+          },
+        }
+      );
     },
     [phases, pipelineId, moveCard]
   );
