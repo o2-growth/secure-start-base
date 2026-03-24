@@ -32,21 +32,25 @@ export function KanbanBoard({ phases, pipelineId, onCardClick }: KanbanBoardProp
       if (!over) return;
 
       const cardId = active.id as string;
-      const targetPhaseId = over.id as string;
+      const overId = over.id as string;
 
-      // Find current phase
+      // Find current phase of the dragged card
       const currentPhase = phases.find((p) =>
         p.cards.some((c) => c.id === cardId)
       );
-      if (!currentPhase || currentPhase.id === targetPhaseId) return;
+      if (!currentPhase) return;
 
-      const targetPhase = phases.find((p) => p.id === targetPhaseId);
-      if (!targetPhase) return;
+      // over.id can be a phase ID or a card ID (when dropped on another card)
+      const targetPhase =
+        phases.find((p) => p.id === overId) ??
+        phases.find((p) => p.cards.some((c) => c.id === overId));
+
+      if (!targetPhase || currentPhase.id === targetPhase.id) return;
 
       moveCard.mutate(
         {
           cardId,
-          targetPhaseId,
+          targetPhaseId: targetPhase.id,
           targetPhaseName: targetPhase.name,
         },
         {

@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.100.0";
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": Deno.env.get("FRONTEND_URL") ?? "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
@@ -112,19 +112,25 @@ Deno.serve(async (req) => {
       throw new Error("Lead has no email address");
     }
 
-    // Interpolate template variables
-    const body = template.body.replace(/\{\{(\w+)\}\}/g, (_: string, key: string) => {
-      const vars: Record<string, string> = {
-        nome: lead.full_name ?? "",
-        email: lead.email ?? "",
-      };
-      return vars[key] ?? "";
-    });
+    // Build interpolation map: lead data + any keys declared in template.variables
+    const templateVars = (template.variables as string[] | null) ?? [];
+    const vars: Record<string, string> = {
+      nome: lead.full_name ?? "",
+      nome_completo: lead.full_name ?? "",
+      email: lead.email ?? "",
+    };
+    // Allow template to declare extra vars — fall back to empty string if not available
+    for (const key of templateVars) {
+      if (!(key in vars)) vars[key] = "";
+    }
+
+    const body = template.body.replace(/\{\{(\w+)\}\}/g, (_: string, key: string) => vars[key] ?? "");
+    const subject = (template.subject ?? template.name).replace(/\{\{(\w+)\}\}/g, (_: string, key: string) => vars[key] ?? "");
 
     const brevoPayload = {
       sender: { name: "O2 CRM", email: "no-reply@o2inc.com.br" },
       to: [{ email: lead.email, name: lead.full_name }],
-      subject: template.subject ?? template.name,
+      subject: subject,
       htmlContent: body,
     };
 

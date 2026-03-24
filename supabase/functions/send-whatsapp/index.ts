@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.100.0";
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": Deno.env.get("FRONTEND_URL") ?? "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
@@ -75,6 +75,14 @@ Deno.serve(async (req) => {
       throw new Error(`Failed to create delivery: ${deliveryError.message}`);
     }
 
+    // Fetch lead info for variable interpolation
+    const { data: cardWithLead } = await supabase
+      .from("cards")
+      .select("leads(full_name, email, phone)")
+      .eq("id", card_id)
+      .single();
+    const lead = (cardWithLead?.leads as any) ?? {};
+
     await supabase.from("activities").insert({
       card_id,
       type: "whatsapp",
@@ -98,6 +106,19 @@ Deno.serve(async (req) => {
     const normalizedPhone = phone.replace(/\D/g, "");
     const e164Phone = normalizedPhone.startsWith("55") ? normalizedPhone : `55${normalizedPhone}`;
 
+    // Build interpolation map
+    const templateVars = (template.variables as string[] | null) ?? [];
+    const vars: Record<string, string> = {
+      nome: lead.full_name ?? "",
+      nome_completo: lead.full_name ?? "",
+      email: lead.email ?? "",
+      telefone: lead.phone ?? phone,
+    };
+    for (const key of templateVars) {
+      if (!(key in vars)) vars[key] = "";
+    }
+    const interpolatedBody = template.body.replace(/\{\{(\w+)\}\}/g, (_: string, key: string) => vars[key] ?? "");
+
     // Build WhatsApp text message payload
     const waPayload = {
       messaging_product: "whatsapp",
@@ -106,7 +127,7 @@ Deno.serve(async (req) => {
       type: "text",
       text: {
         preview_url: false,
-        body: template.body,
+        body: interpolatedBody,
       },
     };
 

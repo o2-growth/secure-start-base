@@ -1,7 +1,20 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.100.0";
 
+async function computeDedupeHash(email: string | null, phone: string | null, document: string | null): Promise<string> {
+  const raw = [
+    email?.toLowerCase().trim() ?? "",
+    phone?.replace(/\D/g, "") ?? "",
+    document?.replace(/\D/g, "") ?? "",
+  ].join("|");
+  const encoded = new TextEncoder().encode(raw);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", encoded);
+  return Array.from(new Uint8Array(hashBuffer))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": Deno.env.get("FRONTEND_URL") ?? "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
@@ -108,6 +121,7 @@ Deno.serve(async (req) => {
         document: document ?? null,
         company_name: company_name ?? null,
         source: source ?? null,
+        dedupe_hash: await computeDedupeHash(email ?? null, phone ?? null, document ?? null),
         created_by: userId,
       })
       .select("id")

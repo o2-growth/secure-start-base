@@ -204,3 +204,47 @@ INSERT INTO public.automation_rules (pipeline_id, trigger_type, conditions, acti
    '{"channel":"email","template_id":"50000000-0000-0000-0000-000000000015","delay_days":21,"stop_on_phase_change":true,"stop_on_won":true,"stop_on_lost":true,"stop_on_reply":false}', true),
   ('20000000-0000-0000-0000-000000000004', 'card_created', '{}',
    '{"channel":"email","template_id":"50000000-0000-0000-0000-000000000016","delay_days":30,"stop_on_phase_change":true,"stop_on_won":true,"stop_on_lost":true,"stop_on_reply":false}', true);
+
+-- ============================================================
+-- SEED: Franchise organization and sample user
+-- ============================================================
+
+-- Franchise organization
+INSERT INTO public.organizations (id, name, type, active)
+VALUES (
+  '00000000-0000-0000-0000-000000000002',
+  'Franquia São Paulo - SP',
+  'franchise',
+  true
+) ON CONFLICT (id) DO NOTHING;
+
+-- Franchise pipelines (audience = franchise, linked to the same BUs)
+INSERT INTO public.pipelines (id, business_unit_id, audience, name, active)
+SELECT
+  gen_random_uuid(),
+  bu.id,
+  'franchise',
+  bu.name || ' — Franquia',
+  true
+FROM public.business_units bu
+WHERE bu.organization_id = '00000000-0000-0000-0000-000000000001'
+ON CONFLICT DO NOTHING;
+
+-- Seed phases for franchise pipelines (same 6 phases)
+INSERT INTO public.pipeline_phases (pipeline_id, name, position, is_final)
+SELECT
+  p.id,
+  phase_name,
+  phase_pos,
+  phase_pos = 6
+FROM public.pipelines p
+CROSS JOIN (VALUES
+  (1, 'Novo Lead'),
+  (2, 'Qualificação'),
+  (3, 'Reunião Agendada'),
+  (4, 'Proposta/Negociação'),
+  (5, 'Fechado Ganha'),
+  (6, 'Fechado Perdida')
+) AS phases(phase_pos, phase_name)
+WHERE p.audience = 'franchise'
+ON CONFLICT DO NOTHING;

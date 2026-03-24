@@ -24,6 +24,7 @@ import PipelinesConfig from "@/pages/admin/PipelinesConfig";
 import AutomationRules from "@/pages/admin/AutomationRules";
 import Integrations from "@/pages/admin/Integrations";
 import MessageTemplates from "@/pages/admin/MessageTemplates";
+import StartForms from "@/pages/admin/StartForms";
 
 import NotFound from "@/pages/NotFound";
 
@@ -56,6 +57,7 @@ const App = () => (
           <Route path="/admin/automations" element={<ProtectedRoute requireAdmin><AutomationRules /></ProtectedRoute>} />
           <Route path="/admin/integrations" element={<ProtectedRoute requireAdmin><Integrations /></ProtectedRoute>} />
           <Route path="/admin/templates" element={<ProtectedRoute requireAdmin><MessageTemplates /></ProtectedRoute>} />
+          <Route path="/admin/start-forms" element={<ProtectedRoute requireAdmin><StartForms /></ProtectedRoute>} />
 
           <Route path="*" element={<NotFound />} />
         </Routes>
