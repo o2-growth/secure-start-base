@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { usePipelines } from "@/hooks/usePipelines";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useNavigate } from "react-router-dom";
 import { Kanban } from "lucide-react";
 
@@ -11,9 +13,20 @@ export default function InternalWorkspace() {
   const { data: profile } = useCurrentProfile();
   const { data: pipelines, isLoading } = usePipelines();
   const navigate = useNavigate();
+  const [selectedBu, setSelectedBu] = useState<string>("all");
 
-  const internalPipelines = pipelines?.filter(
-    (p: any) => p.audience === "internal"
+  // Derive unique BUs from internal pipelines
+  const allInternalPipelines = pipelines?.filter((p: any) => p.audience === "internal") ?? [];
+  const busFromPipelines = Array.from(
+    new Map(
+      allInternalPipelines
+        .filter((p: any) => p.business_units)
+        .map((p: any) => [(p.business_units as any).id, (p.business_units as any).name])
+    ).entries()
+  );
+
+  const internalPipelines = allInternalPipelines.filter(
+    (p: any) => selectedBu === "all" || (p.business_units as any)?.id === selectedBu
   );
 
   if (isLoading) {
@@ -35,6 +48,23 @@ export default function InternalWorkspace() {
           Pipelines do time interno O2
         </p>
       </div>
+
+      {busFromPipelines.length > 1 && (
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">BU:</span>
+          <Select value={selectedBu} onValueChange={setSelectedBu}>
+            <SelectTrigger className="w-48 h-8 text-sm">
+              <SelectValue placeholder="Todas as BUs" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as BUs</SelectItem>
+              {busFromPipelines.map(([id, name]) => (
+                <SelectItem key={id} value={id}>{name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       {(!internalPipelines || internalPipelines.length === 0) ? (
         <Card>

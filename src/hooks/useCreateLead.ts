@@ -20,69 +20,24 @@ export function useCreateLead() {
 
   return useMutation({
     mutationFn: async (input: CreateLeadInput) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Não autenticado");
-
-      // 1. Get first phase
-      const { data: phases, error: phError } = await supabase
-        .from("pipeline_phases")
-        .select("id")
-        .eq("pipeline_id", input.pipelineId)
-        .order("position")
-        .limit(1);
-      if (phError) throw phError;
-      if (!phases?.length) throw new Error("Pipeline sem fases configuradas");
-
-      // 2. Get profile
-      const { data: profile, error: prError } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("auth_user_id", user.id)
-        .single();
-      if (prError) throw prError;
-
-      // 3. Insert lead
-      const { data: lead, error: leadErr } = await supabase
-        .from("leads")
-        .insert({
+      const { data, error } = await supabase.functions.invoke("create-lead", {
+        body: {
+          pipeline_id: input.pipelineId,
           organization_id: input.organizationId,
           business_unit_id: input.businessUnitId,
           full_name: input.fullName,
-          email: input.email || null,
-          phone: input.phone || null,
-          document: input.document || null,
-          company_name: input.companyName || null,
-          source: input.source || null,
-          created_by: user.id,
-        })
-        .select("id")
-        .single();
-      if (leadErr) throw leadErr;
-
-      // 4. Insert card
-      const { data: card, error: cardErr } = await supabase
-        .from("cards")
-        .insert({
-          lead_id: lead.id,
-          pipeline_id: input.pipelineId,
-          current_phase_id: phases[0].id,
-          owner_profile_id: profile.id,
-          status: "open",
-          origin: "manual",
-        })
-        .select("id")
-        .single();
-      if (cardErr) throw cardErr;
-
-      // 5. Activity
-      await supabase.from("activities").insert({
-        card_id: card.id,
-        type: "system",
-        payload: { message: "Lead criado manualmente" },
-        created_by: user.id,
+          email: input.email,
+          phone: input.phone,
+          document: input.document,
+          company_name: input.companyName,
+          source: input.source,
+        },
       });
 
-      return card;
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      return data as { card_id: string; lead_id: string };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["pipeline-cards"] });

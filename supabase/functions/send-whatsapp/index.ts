@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.100.0";
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": Deno.env.get("FRONTEND_URL") ?? "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
@@ -75,6 +75,14 @@ Deno.serve(async (req) => {
       throw new Error(`Failed to create delivery: ${deliveryError.message}`);
     }
 
+    // Fetch lead info for variable interpolation
+    const { data: cardWithLead } = await supabase
+      .from("cards")
+      .select("leads(full_name, email, phone)")
+      .eq("id", card_id)
+      .single();
+    const lead = (cardWithLead?.leads as any) ?? {};
+
     await supabase.from("activities").insert({
       card_id,
       type: "whatsapp",
@@ -82,9 +90,77 @@ Deno.serve(async (req) => {
       created_by: userId,
     });
 
-    // TODO: Replace with actual WhatsApp API call
-    // const WA_TOKEN = Deno.env.get("WHATSAPP_TOKEN");
-    // await fetch("https://graph.facebook.com/...", { ... });
+    // Call real Meta WhatsApp Business Cloud API
+    const WA_TOKEN = Deno.env.get("WHATSAPP_TOKEN");
+    const WA_PHONE_ID = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID");
+
+    if (!WA_TOKEN || !WA_PHONE_ID) {
+      await supabase.from("message_deliveries").update({
+        status: "failed",
+        error_message: "WHATSAPP_TOKEN or WHATSAPP_PHONE_NUMBER_ID not configured",
+      }).eq("id", delivery.id);
+      throw new Error("WhatsApp credentials not configured");
+    }
+
+    // Normalize phone to E.164 format (remove non-digits, add country code if needed)
+    const normalizedPhone = phone.replace(/\D/g, "");
+    const e164Phone = normalizedPhone.startsWith("55") ? normalizedPhone : `55${normalizedPhone}`;
+
+    // Build interpolation map
+    const templateVars = (template.variables as string[] | null) ?? [];
+    const vars: Record<string, string> = {
+      nome: lead.full_name ?? "",
+      nome_completo: lead.full_name ?? "",
+      email: lead.email ?? "",
+      telefone: lead.phone ?? phone,
+    };
+    for (const key of templateVars) {
+      if (!(key in vars)) vars[key] = "";
+    }
+    const interpolatedBody = template.body.replace(/\{\{(\w+)\}\}/g, (_: string, key: string) => vars[key] ?? "");
+
+    // Build WhatsApp text message payload
+    const waPayload = {
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: e164Phone,
+      type: "text",
+      text: {
+        preview_url: false,
+        body: interpolatedBody,
+      },
+    };
+
+    const waRes = await fetch(
+      `https://graph.facebook.com/v18.0/${WA_PHONE_ID}/messages`,
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${WA_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(waPayload),
+      }
+    );
+
+    if (!waRes.ok) {
+      const errText = await waRes.text();
+      await supabase.from("message_deliveries").update({
+        status: "failed",
+        error_message: errText,
+      }).eq("id", delivery.id);
+      throw new Error(`WhatsApp API error: ${errText}`);
+    }
+
+    const waData = await waRes.json();
+    const providerMsgId = waData.messages?.[0]?.id ?? null;
+
+    // Update delivery record with success
+    await supabase.from("message_deliveries").update({
+      status: "sent",
+      provider_message_id: providerMsgId,
+      sent_at: new Date().toISOString(),
+    }).eq("id", delivery.id);
 
     return new Response(JSON.stringify({ success: true, delivery_id: delivery.id }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

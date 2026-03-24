@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { IntegrationStatusCard } from "@/components/IntegrationStatusCard";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, Plus, Pencil, Puzzle } from "lucide-react";
@@ -42,8 +43,17 @@ function useIntegrations() {
 function useCreateIntegration() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (conn: { provider: Provider; organization_id?: string | null }) => {
-      const { error } = await supabase.from("integration_connections").insert(conn);
+    mutationFn: async (conn: { provider: Provider; organization_id?: string | null; config_json?: string | null }) => {
+      const payload: any = { provider: conn.provider };
+      if (conn.organization_id) payload.organization_id = conn.organization_id;
+      if (conn.config_json?.trim()) {
+        try {
+          payload.encrypted_config = JSON.parse(conn.config_json);
+        } catch {
+          payload.encrypted_config = conn.config_json;
+        }
+      }
+      const { error } = await supabase.from("integration_connections").insert(payload);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["integrations"] }),
@@ -67,10 +77,11 @@ export default function Integrations() {
   const updateConn = useUpdateIntegration();
   const [dialog, setDialog] = useState(false);
   const [provider, setProvider] = useState<Provider>("brevo");
+  const [configJson, setConfigJson] = useState("");
 
   const handleCreate = () => {
-    createConn.mutate({ provider }, {
-      onSuccess: () => { toast.success("Integração criada"); setDialog(false); },
+    createConn.mutate({ provider, config_json: configJson }, {
+      onSuccess: () => { toast.success("Integração criada"); setDialog(false); setConfigJson(""); },
       onError: (e) => toast.error(e.message),
     });
   };
@@ -100,10 +111,28 @@ export default function Integrations() {
                 </SelectContent>
               </Select>
             </div>
+            <div>
+              <Label>Configuração (JSON ou chave de API)</Label>
+              <textarea
+                className="w-full mt-1 rounded-md border border-input bg-background px-3 py-2 text-sm font-mono min-h-[80px] resize-y focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                placeholder={'{"api_key": "sua-chave-aqui"}'}
+                value={configJson}
+                onChange={(e) => setConfigJson(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground mt-1">Cole a chave de API ou um objeto JSON com as credenciais.</p>
+            </div>
             <Button onClick={handleCreate} disabled={createConn.isPending} className="w-full">Criar</Button>
           </div>
         </DialogContent>
       </Dialog>
+
+      {connections && connections.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {connections.map((conn) => (
+            <IntegrationStatusCard key={conn.id} connection={conn} />
+          ))}
+        </div>
+      )}
 
       <Card>
         <CardContent className="p-0">

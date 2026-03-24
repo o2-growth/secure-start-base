@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.100.0";
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": Deno.env.get("FRONTEND_URL") ?? "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
@@ -85,7 +85,58 @@ Deno.serve(async (req) => {
       created_by: userId,
     });
 
-    // TODO: Replace with actual contract generation (e.g., external provider)
+    // Integrate with Lovable Contracts external tool
+    const CONTRACTS_WEBHOOK_URL = Deno.env.get("LOVABLE_CONTRACTS_WEBHOOK_URL");
+
+    if (CONTRACTS_WEBHOOK_URL) {
+      // Fetch card and lead details for contract payload
+      const { data: cardWithDetails } = await supabase
+        .from("cards")
+        .select("*, leads(full_name, email, phone, document, company_name), pipelines(name, business_units(name))")
+        .eq("id", card_id)
+        .single();
+
+      const contractPayload = {
+        contract_id: contract.id,
+        card_id,
+        lead: (cardWithDetails?.leads as any) ?? {},
+        pipeline: (cardWithDetails?.pipelines as any)?.name ?? "",
+        business_unit: (cardWithDetails?.pipelines as any)?.business_units?.name ?? "",
+        created_by: userId,
+        created_at: contract.created_at,
+      };
+
+      try {
+        const contractRes = await fetch(CONTRACTS_WEBHOOK_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(contractPayload),
+        });
+
+        if (contractRes.ok) {
+          const contractData = await contractRes.json();
+          const externalId = contractData.external_contract_id ?? contractData.id ?? null;
+          const contractUrl = contractData.url ?? null;
+
+          await supabase.from("contracts").update({
+            external_contract_id: externalId,
+            status: "pending_signature",
+            payload: { ...contractPayload, lovable_response: contractData },
+          }).eq("id", contract.id);
+
+          await supabase.from("cards").update({ contract_status: "pending_signature" }).eq("id", card_id);
+
+          await supabase.from("activities").insert({
+            card_id,
+            type: "contract",
+            payload: { contract_id: contract.id, status: "pending_signature", contract_url: contractUrl },
+            created_by: userId,
+          });
+        }
+      } catch (_integrationError) {
+        // Non-blocking: contract record was created, integration failed silently
+      }
+    }
 
     return new Response(JSON.stringify({ success: true, contract_id: contract.id }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

@@ -1,13 +1,15 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useCard } from "@/hooks/useCard";
-import { useMoveCard, validatePhaseFields } from "@/hooks/useMoveCard";
+import { useMoveCard, MissingFieldsError } from "@/hooks/useMoveCard";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
+import { hasPermission } from "@/lib/rbac/permissions";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { AppShell } from "@/components/AppShell";
 import { CardForm } from "@/components/CardForm";
 import { ActivityTimeline } from "@/components/ActivityTimeline";
+import { AutomationLogTable } from "@/components/AutomationLogTable";
 import { PhaseGuardDialog } from "@/components/PhaseGuardDialog";
 import { CardContractPanel } from "@/components/CardContractPanel";
 import { CardMeetingPanel } from "@/components/CardMeetingPanel";
@@ -59,18 +61,20 @@ export default function CardDetails() {
     }
   };
 
-  const handleMovePhase = async () => {
-    if (!selectedPhase || !cardId || !pipelineId) return;
-    const missing = await validatePhaseFields(cardId, selectedPhase, pipelineId);
-    if (missing.length > 0) {
-      setMissingFields(missing);
-      setGuardOpen(true);
-      return;
-    }
+  const handleMovePhase = () => {
+    if (!selectedPhase || !cardId) return;
     const phase = phases.find((p) => p.id === selectedPhase);
     moveCard.mutate(
       { cardId, targetPhaseId: selectedPhase, targetPhaseName: phase?.name ?? "" },
-      { onSuccess: () => { setSelectedPhase(""); refetch(); } }
+      {
+        onSuccess: () => { setSelectedPhase(""); refetch(); },
+        onError: (err: Error) => {
+          if (err instanceof MissingFieldsError) {
+            setMissingFields(err.missingFields);
+            setGuardOpen(true);
+          }
+        },
+      }
     );
   };
 
@@ -184,6 +188,16 @@ export default function CardDetails() {
                 <ActivityTimeline activities={activities} />
               </CardContent>
             </Card>
+
+            {/* Automation Runs */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Automações</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <AutomationLogTable cardId={cardId} />
+              </CardContent>
+            </Card>
           </div>
 
           {/* Sidebar */}
@@ -227,11 +241,7 @@ export default function CardDetails() {
             <CardContractPanel
               cardId={card.id}
               contractStatus={card.contract_status}
-              canGenerate={
-                profile?.role === "admin" ||
-                profile?.role === "enablement" ||
-                profile?.role === "closer"
-              }
+              canGenerate={hasPermission(profile?.role ?? null, "generate_contract")}
             />
 
             {/* Meeting Panel */}

@@ -8,7 +8,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import { useLeadValidation } from "@/hooks/useLeadValidation";
 import { useCreateLead } from "@/hooks/useCreateLead";
-import { isAdminOrEnablement } from "@/lib/rbac/permissions";
 import { LeadValidationAlert } from "@/components/LeadValidationAlert";
 import { AppShell } from "@/components/AppShell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,7 +41,7 @@ export default function NewLead() {
   const { pipelineId } = useParams<{ pipelineId: string }>();
   const navigate = useNavigate();
   const { data: profile } = useCurrentProfile();
-  const { duplicates, isChecking, checkDuplicates, clearDuplicates } = useLeadValidation();
+  const { duplicates, canOverride, isChecking, checkDuplicates, clearDuplicates } = useLeadValidation();
   const createLead = useCreateLead();
   const [showDuplicates, setShowDuplicates] = useState(false);
 
@@ -60,6 +59,25 @@ export default function NewLead() {
     enabled: !!pipelineId,
   });
 
+  // Fetch active start form for this pipeline to know which fields to show
+  const startFormQuery = useQuery({
+    queryKey: ["start_form", pipelineId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("start_forms")
+        .select("schema")
+        .eq("pipeline_id", pipelineId!)
+        .eq("active", true)
+        .maybeSingle();
+      return (data?.schema as any)?.fields as string[] | null;
+    },
+    enabled: !!pipelineId,
+  });
+
+  // Fields configured in the start form (fall back to all fields if not configured)
+  const ALL_FIELDS = ["full_name", "email", "phone", "document", "company_name", "source", "notes"];
+  const visibleFields = new Set<string>(startFormQuery.data ?? ALL_FIELDS);
+
   const form = useForm<LeadFormValues>({
     resolver: zodResolver(leadSchema),
     defaultValues: {
@@ -75,19 +93,17 @@ export default function NewLead() {
 
   const pipeline = pipelineQuery.data;
   const bu = pipeline?.business_units as any;
-  const canOverride = isAdminOrEnablement(profile?.role ?? null);
-
   const doCreate = async (values: LeadFormValues, force = false) => {
     if (!profile || !pipeline || !pipelineId) return;
 
     if (!force) {
-      const found = await checkDuplicates(
+      const result = await checkDuplicates(
         profile.organizationId,
         values.email,
         values.phone,
         values.document
       );
-      if (found.length > 0) {
+      if (result.duplicates.length > 0) {
         setShowDuplicates(true);
         return;
       }
@@ -147,91 +163,107 @@ export default function NewLead() {
                   )}
                 />
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="email"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>E-mail</FormLabel>
-                        <FormControl>
-                          <Input type="email" placeholder="email@exemplo.com" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
+                {(visibleFields.has("email") || visibleFields.has("phone")) && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {visibleFields.has("email") && (
+                      <FormField
+                        control={form.control}
+                        name="email"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>E-mail</FormLabel>
+                            <FormControl>
+                              <Input type="email" placeholder="email@exemplo.com" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                     )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="phone"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Telefone</FormLabel>
-                        <FormControl>
-                          <Input placeholder="(11) 99999-9999" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
+                    {visibleFields.has("phone") && (
+                      <FormField
+                        control={form.control}
+                        name="phone"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Telefone</FormLabel>
+                            <FormControl>
+                              <Input placeholder="(11) 99999-9999" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                     )}
-                  />
-                </div>
+                  </div>
+                )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {(visibleFields.has("document") || visibleFields.has("company_name")) && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {visibleFields.has("document") && (
+                      <FormField
+                        control={form.control}
+                        name="document"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Documento (CPF/CNPJ)</FormLabel>
+                            <FormControl>
+                              <Input placeholder="000.000.000-00" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+                    {visibleFields.has("company_name") && (
+                      <FormField
+                        control={form.control}
+                        name="companyName"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Empresa</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Nome da empresa" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+                  </div>
+                )}
+
+                {visibleFields.has("source") && (
                   <FormField
                     control={form.control}
-                    name="document"
+                    name="source"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Documento (CPF/CNPJ)</FormLabel>
+                        <FormLabel>Origem</FormLabel>
                         <FormControl>
-                          <Input placeholder="000.000.000-00" {...field} />
+                          <Input placeholder="Ex: site, indicação, evento" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
+                )}
+
+                {visibleFields.has("notes") && (
                   <FormField
                     control={form.control}
-                    name="companyName"
+                    name="notes"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Empresa</FormLabel>
+                        <FormLabel>Observações</FormLabel>
                         <FormControl>
-                          <Input placeholder="Nome da empresa" {...field} />
+                          <Textarea placeholder="Notas adicionais..." {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                </div>
-
-                <FormField
-                  control={form.control}
-                  name="source"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Origem</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Ex: site, indicação, evento" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="notes"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Observações</FormLabel>
-                      <FormControl>
-                        <Textarea placeholder="Notas adicionais..." {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                )}
 
                 {showDuplicates && duplicates.length > 0 && (
                   <LeadValidationAlert

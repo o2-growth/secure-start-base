@@ -63,6 +63,7 @@ export function AppSidebar() {
     { title: "Automações", url: "/admin/automations", icon: Zap },
     { title: "Integrações", url: "/admin/integrations", icon: Puzzle },
     { title: "Templates", url: "/admin/templates", icon: FileText },
+    { title: "Start Forms", url: "/admin/start-forms", icon: FileText },
   ];
 
   if (isLoading) {

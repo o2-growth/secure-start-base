@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.100.0";
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": Deno.env.get("FRONTEND_URL") ?? "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
@@ -85,7 +85,12 @@ Deno.serve(async (req) => {
           rule_id: rule.id,
           card_id: card_id,
           status: "pending",
-          input_payload: { trigger_type, delay_days: delayDays, scheduled_for: new Date(Date.now() + delayDays * 86400000).toISOString() },
+          input_payload: {
+            trigger_type,
+            delay_days: delayDays,
+            scheduled_for: new Date(Date.now() + delayDays * 86400000).toISOString(),
+            initial_phase_id: card.current_phase_id,
+          },
         });
         results.push({ rule_id: rule.id, status: "pending", delay_days: delayDays });
         continue;
@@ -101,18 +106,32 @@ Deno.serve(async (req) => {
           input_payload: { trigger_type, card_status: card.status },
         }).select().single();
 
-        // Process actions
+        // Process actions — invoke real send functions
         const channel = (actions as any)?.channel;
         const templateId = (actions as any)?.template_id;
+        const phone = (actions as any)?.phone;
 
-        if (channel && templateId) {
-          // Create message delivery record
-          await supabase.from("message_deliveries").insert({
-            card_id: card_id,
-            channel: channel,
-            template_id: templateId,
-            status: "pending",
+        if (channel === "email" && templateId) {
+          await supabase.functions.invoke("send-brevo-email", {
+            body: { card_id: card_id, template_id: templateId },
           });
+        } else if (channel === "whatsapp" && templateId) {
+          const cardPhone = (card as any)?.leads?.phone ?? phone ?? null;
+          if (cardPhone) {
+            await supabase.functions.invoke("send-whatsapp", {
+              body: { card_id: card_id, template_id: templateId, phone: cardPhone },
+            });
+          }
+        } else if (channel === "both" && templateId) {
+          await supabase.functions.invoke("send-brevo-email", {
+            body: { card_id: card_id, template_id: templateId },
+          });
+          const cardPhone = (card as any)?.leads?.phone ?? phone ?? null;
+          if (cardPhone) {
+            await supabase.functions.invoke("send-whatsapp", {
+              body: { card_id: card_id, template_id: templateId, phone: cardPhone },
+            });
+          }
         }
 
         // Register activity

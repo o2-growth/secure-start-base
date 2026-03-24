@@ -9,7 +9,7 @@ import {
 } from "@dnd-kit/core";
 import { KanbanColumn } from "./KanbanColumn";
 import { PhaseGuardDialog } from "./PhaseGuardDialog";
-import { useMoveCard, validatePhaseFields, type MissingField } from "@/hooks/useMoveCard";
+import { useMoveCard, MissingFieldsError, type MissingField } from "@/hooks/useMoveCard";
 import type { BoardPhase } from "@/hooks/usePipelineBoard";
 
 interface KanbanBoardProps {
@@ -32,30 +32,36 @@ export function KanbanBoard({ phases, pipelineId, onCardClick }: KanbanBoardProp
       if (!over) return;
 
       const cardId = active.id as string;
-      const targetPhaseId = over.id as string;
+      const overId = over.id as string;
 
-      // Find current phase
+      // Find current phase of the dragged card
       const currentPhase = phases.find((p) =>
         p.cards.some((c) => c.id === cardId)
       );
-      if (!currentPhase || currentPhase.id === targetPhaseId) return;
+      if (!currentPhase) return;
 
-      const targetPhase = phases.find((p) => p.id === targetPhaseId);
-      if (!targetPhase) return;
+      // over.id can be a phase ID or a card ID (when dropped on another card)
+      const targetPhase =
+        phases.find((p) => p.id === overId) ??
+        phases.find((p) => p.cards.some((c) => c.id === overId));
 
-      // Validate required fields
-      const missing = await validatePhaseFields(cardId, targetPhaseId, pipelineId);
-      if (missing.length > 0) {
-        setMissingFields(missing);
-        setGuardOpen(true);
-        return;
-      }
+      if (!targetPhase || currentPhase.id === targetPhase.id) return;
 
-      moveCard.mutate({
-        cardId,
-        targetPhaseId,
-        targetPhaseName: targetPhase.name,
-      });
+      moveCard.mutate(
+        {
+          cardId,
+          targetPhaseId: targetPhase.id,
+          targetPhaseName: targetPhase.name,
+        },
+        {
+          onError: (err: Error) => {
+            if (err instanceof MissingFieldsError) {
+              setMissingFields(err.missingFields);
+              setGuardOpen(true);
+            }
+          },
+        }
+      );
     },
     [phases, pipelineId, moveCard]
   );
