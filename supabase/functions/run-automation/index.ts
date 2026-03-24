@@ -85,7 +85,12 @@ Deno.serve(async (req) => {
           rule_id: rule.id,
           card_id: card_id,
           status: "pending",
-          input_payload: { trigger_type, delay_days: delayDays, scheduled_for: new Date(Date.now() + delayDays * 86400000).toISOString() },
+          input_payload: {
+            trigger_type,
+            delay_days: delayDays,
+            scheduled_for: new Date(Date.now() + delayDays * 86400000).toISOString(),
+            initial_phase_id: card.current_phase_id,
+          },
         });
         results.push({ rule_id: rule.id, status: "pending", delay_days: delayDays });
         continue;
