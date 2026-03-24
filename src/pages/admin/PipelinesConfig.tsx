@@ -24,7 +24,7 @@ import { toast } from "sonner";
 import type { Database } from "@/integrations/supabase/types";
 
 type FieldType = Database["public"]["Enums"]["field_type"];
-const FIELD_TYPES: FieldType[] = ["text", "number", "email", "phone", "date", "select", "multiselect", "textarea", "checkbox", "url"];
+const FIELD_TYPES: FieldType[] = ["text", "number", "email", "phone", "date", "select", "textarea"];
 
 export default function PipelinesConfig() {
   const { data: pipelines, isLoading } = useAdminPipelines();

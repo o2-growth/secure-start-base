@@ -19,7 +19,7 @@ import type { Database } from "@/integrations/supabase/types";
 
 type Template = Database["public"]["Tables"]["message_templates"]["Row"];
 type Channel = Database["public"]["Enums"]["message_channel"];
-type Category = Database["public"]["Enums"]["message_category"];
+type Category = "transactional" | "followup";
 
 const CHANNEL_LABELS: Record<Channel, string> = { email: "E-mail", whatsapp: "WhatsApp" };
 const CATEGORY_LABELS: Record<Category, string> = { transactional: "Transacional", followup: "Follow-up" };

@@ -657,6 +657,41 @@ export type Database = {
           },
         ]
       }
+      start_forms: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          name: string
+          pipeline_id: string
+          schema: Json | null
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          name: string
+          pipeline_id: string
+          schema?: Json | null
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          name?: string
+          pipeline_id?: string
+          schema?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "start_forms_pipeline_id_fkey"
+            columns: ["pipeline_id"]
+            isOneToOne: false
+            referencedRelation: "pipelines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           id: string

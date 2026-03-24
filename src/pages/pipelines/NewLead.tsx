@@ -63,8 +63,8 @@ export default function NewLead() {
   const startFormQuery = useQuery({
     queryKey: ["start_form", pipelineId],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("start_forms")
+      const { data } = await (supabase
+        .from("start_forms") as any)
         .select("schema")
         .eq("pipeline_id", pipelineId!)
         .eq("active", true)
@@ -122,7 +122,7 @@ export default function NewLead() {
       source: values.source || undefined,
     });
 
-    navigate(`/pipelines/${pipelineId}/cards/${result.id}`);
+    navigate(`/pipelines/${pipelineId}/cards/${(result as any).id}`);
   };
 
   const onSubmit = (values: LeadFormValues) => doCreate(values);
