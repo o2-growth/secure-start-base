@@ -18,13 +18,13 @@ import { format } from "date-fns";
 import type { Database } from "@/integrations/supabase/types";
 
 type Trigger = Database["public"]["Enums"]["automation_trigger"];
-const TRIGGERS: Trigger[] = ["card_created", "phase_enter", "delay_elapsed", "meeting_finished"];
+const TRIGGERS: Trigger[] = ["phase_change", "field_update", "time_based", "lead_created"];
 
 const TRIGGER_LABELS: Record<Trigger, string> = {
-  card_created: "Card Criado",
-  phase_enter: "Entrada na Fase",
-  delay_elapsed: "Tempo Decorrido",
-  meeting_finished: "Reunião Finalizada",
+  phase_change: "Mudança de Fase",
+  field_update: "Atualização de Campo",
+  time_based: "Tempo Decorrido",
+  lead_created: "Lead Criado",
 };
 
 export default function AutomationRules() {
@@ -36,7 +36,7 @@ export default function AutomationRules() {
   const [dialog, setDialog] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [pipelineId, setPipelineId] = useState("");
-  const [triggerType, setTriggerType] = useState<Trigger>("card_created");
+  const [triggerType, setTriggerType] = useState<Trigger>("lead_created");
   const [conditions, setConditions] = useState("{}");
   const [actions, setActions] = useState("{}");
   const [active, setActive] = useState(true);
@@ -49,7 +49,7 @@ export default function AutomationRules() {
   const openCreate = () => {
     setEditId(null);
     setPipelineId("");
-    setTriggerType("card_created");
+    setTriggerType("lead_created");
     setConditions("{}");
     setActions("{}");
     setActive(true);

@@ -16,7 +16,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import type { Database } from "@/integrations/supabase/types";
 
-type Provider = Database["public"]["Enums"]["integration_provider"];
+type Provider = "brevo" | "whatsapp_official" | "google_meet" | "elephan" | "contracts";
 const PROVIDERS: Provider[] = ["brevo", "whatsapp_official", "google_meet", "elephan", "contracts"];
 const PROVIDER_LABELS: Record<Provider, string> = {
   brevo: "Brevo",
