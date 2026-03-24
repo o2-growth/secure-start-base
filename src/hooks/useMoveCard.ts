@@ -22,41 +22,6 @@ export class MissingFieldsError extends Error {
   }
 }
 
-/**
- * @deprecated Field validation now runs server-side inside the move-card edge function.
- * This function is kept for backwards compatibility with existing callers (CardDetails, KanbanBoard).
- * Prefer relying on MissingFieldsError thrown by useMoveCard instead.
- */
-export async function validatePhaseFields(
-  cardId: string,
-  targetPhaseId: string,
-  pipelineId: string
-): Promise<MissingField[]> {
-  // Get required fields for target phase
-  const { data: fields } = await supabase
-    .from("pipeline_fields")
-    .select("id, label, key")
-    .eq("pipeline_id", pipelineId)
-    .eq("phase_id", targetPhaseId)
-    .eq("required", true);
-
-  if (!fields?.length) return [];
-
-  // Get current field values
-  const { data: values } = await supabase
-    .from("card_field_values")
-    .select("pipeline_field_id, value")
-    .eq("card_id", cardId);
-
-  const valuesMap = new Map(
-    (values ?? []).map((v) => [v.pipeline_field_id, v.value])
-  );
-
-  return fields.filter((f) => {
-    const val = valuesMap.get(f.id);
-    return val === null || val === undefined || val === "" || val === '""';
-  });
-}
 
 export function useMoveCard() {
   const queryClient = useQueryClient();

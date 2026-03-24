@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useCard } from "@/hooks/useCard";
 import { useMoveCard, MissingFieldsError } from "@/hooks/useMoveCard";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
+import { hasPermission } from "@/lib/rbac/permissions";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { AppShell } from "@/components/AppShell";
@@ -240,11 +241,7 @@ export default function CardDetails() {
             <CardContractPanel
               cardId={card.id}
               contractStatus={card.contract_status}
-              canGenerate={
-                profile?.role === "admin" ||
-                profile?.role === "enablement" ||
-                profile?.role === "closer"
-              }
+              canGenerate={hasPermission(profile?.role ?? null, "generate_contract")}
             />
 
             {/* Meeting Panel */}
