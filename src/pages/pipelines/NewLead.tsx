@@ -8,7 +8,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import { useLeadValidation } from "@/hooks/useLeadValidation";
 import { useCreateLead } from "@/hooks/useCreateLead";
-import { isAdminOrEnablement } from "@/lib/rbac/permissions";
 import { LeadValidationAlert } from "@/components/LeadValidationAlert";
 import { AppShell } from "@/components/AppShell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,7 +41,7 @@ export default function NewLead() {
   const { pipelineId } = useParams<{ pipelineId: string }>();
   const navigate = useNavigate();
   const { data: profile } = useCurrentProfile();
-  const { duplicates, isChecking, checkDuplicates, clearDuplicates } = useLeadValidation();
+  const { duplicates, canOverride, isChecking, checkDuplicates, clearDuplicates } = useLeadValidation();
   const createLead = useCreateLead();
   const [showDuplicates, setShowDuplicates] = useState(false);
 
@@ -75,19 +74,17 @@ export default function NewLead() {
 
   const pipeline = pipelineQuery.data;
   const bu = pipeline?.business_units as any;
-  const canOverride = isAdminOrEnablement(profile?.role ?? null);
-
   const doCreate = async (values: LeadFormValues, force = false) => {
     if (!profile || !pipeline || !pipelineId) return;
 
     if (!force) {
-      const found = await checkDuplicates(
+      const result = await checkDuplicates(
         profile.organizationId,
         values.email,
         values.phone,
         values.document
       );
-      if (found.length > 0) {
+      if (result.duplicates.length > 0) {
         setShowDuplicates(true);
         return;
       }
